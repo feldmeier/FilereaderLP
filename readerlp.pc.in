@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+libdir=@CMAKE_INSTALL_PREFIX@/lib
+includedir=@CMAKE_INSTALL_PREFIX@/@include@
+
+Name: READERLP
+Description: Filereader for the mathematical programming file format ".lp"
+URL: michael-feldmeier.dev
+Version: 1.0.0
+Libs: -L${libdir} -lreaderlp
+Cflags: -I${includedir}
+Requires:

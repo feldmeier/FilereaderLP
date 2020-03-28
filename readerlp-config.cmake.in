@@ -1,0 +1,7 @@
+if(NOT TARGET libreaderlp)
+  include("${CMAKE_CURRENT_LIST_DIR}/readerlp-targets.cmake")
+endif()
+
+set(READERLP_LIBRARIES libreaderlp)
+set(READERLP_INCLUDE_DIRS "@CONF_INCLUDE_DIRS@")
+set(READERLP_FOUND TRUE)
