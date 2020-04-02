@@ -4,5 +4,6 @@
 #include <string>
 
 void readinstance(std::string filename);
+void writeinstance(std::string filename);
 
 #endif

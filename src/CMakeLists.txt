@@ -3,6 +3,7 @@ set(sources
 )
 
 set(headers
+   builder.hpp
    instance.hpp
    reader.hpp
 )

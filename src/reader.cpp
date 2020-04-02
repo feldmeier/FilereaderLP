@@ -1,9 +1,13 @@
 #include "reader.hpp"
 
+#include "builder.hpp"
+
+#include <cassert>
 #include <cstdio>
-#include <vector>
 #include <limits>
+#include <map>
 #include <memory>
+#include <vector>
 
 #define LP_MAX_NAME_LENGTH 255
 #define LP_MAX_LINE_LENGTH 560
@@ -48,8 +52,7 @@ enum class RawTokenType {
    MINUS,
    HAT,
    SLASH,
-   ASTERISK,
-   WHITE
+   ASTERISK
 };
 
 class RawToken {
@@ -84,7 +87,6 @@ enum class ProcessedTokenType {
    BRKCL,
    COMP,
    LNEND,
-   FLEND,
    SLASH,
    ASTERISK,
    HAT
@@ -153,16 +155,31 @@ private:
    FILE* file;
    std::vector<std::unique_ptr<RawToken>> rawtokens;
    std::vector<std::unique_ptr<ProcessedToken>> processedtokens;
+   std::map<LpSectionKeyword, std::vector<std::unique_ptr<ProcessedToken>>> sectiontokens;
    
    char linebuffer[LP_MAX_LINE_LENGTH+1];
    bool linebufferrefill;
    char* linebufferpos;
 
+   Builder builder;
+
 public:
    Reader(FILE* f) : file(f) {};
    void tokenize();
-   void readnexttoken(bool* done);
+   void readnexttoken(bool& done);
    void processtokens();
+   void splittokens();
+   void processsections();
+   void processnonesec();
+   void processobjsec();
+   void processconsec();
+   void processboundssec();
+   void processbinsec();
+   void processgensec();
+   void processsemisec();
+   void processsossec();
+   void processendsec();
+   void parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token, std::shared_ptr<Expression> expr, unsigned int& i);
 };
 
 void readinstance(std::string filename) {
@@ -170,6 +187,8 @@ void readinstance(std::string filename) {
    Reader reader(file);
    reader.tokenize();
    reader.processtokens();
+   reader.splittokens();
+   reader.processsections();
 
    fclose(file);
 }
@@ -225,15 +244,359 @@ LpSectionKeyword parsesectionkeyword(const std::string& str) {
    return LpSectionKeyword::NONE;
 }
 
+void Reader::processnonesec() {
+   printf("Processing %ld token in NONE section\n", sectiontokens[LpSectionKeyword::NONE].size());
+   assert(sectiontokens[LpSectionKeyword::NONE].empty());
+}
+
+void Reader::parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token, std::shared_ptr<Expression> expr, unsigned int& i) {
+   if (token.size() - i >= 1 && token[0]->type == ProcessedTokenType::CONID) {
+      expr->name = ((ProcessedConsIdToken*)token[0].get())->name;
+      i++;
+   }
+
+   while (i<token.size()) {
+      // const var
+      if (token.size() - i >= 2
+      && token[i]->type == ProcessedTokenType::CONST
+      && token[i+1]->type == ProcessedTokenType::VARID) {
+         std::string name = ((ProcessedVarIdToken*)token[i+1].get())->name;
+         
+         std::shared_ptr<LinTerm> linterm = std::shared_ptr<LinTerm>(new LinTerm());
+         linterm->coef = ((ProcessedConstantToken*)token[i].get())->value;
+         linterm->var = builder.getvarbyname(name);
+         expr->linterms.push_back(linterm);
+
+         i += 2;
+         continue;
+      }
+
+      // const
+      if (token.size() - i  >= 1 && token[i]->type == ProcessedTokenType::CONST) {
+         expr->offset = ((ProcessedConstantToken*)token[i].get())->value;
+         i++;
+         continue;
+      }
+      
+      // var
+      if (token.size() - i  >= 1 && token[i]->type == ProcessedTokenType::VARID) {
+         std::string name = ((ProcessedVarIdToken*)token[i].get())->name;
+         
+         std::shared_ptr<LinTerm> linterm = std::shared_ptr<LinTerm>(new LinTerm());
+         linterm->coef = 1.0;
+         linterm->var = builder.getvarbyname(name);
+         expr->linterms.push_back(linterm);
+
+         i++;
+         continue;
+      }
+
+      // quadratic expression
+      if (token.size() - i >= 2 && token[i]->type == ProcessedTokenType::BRKOP) {
+         i++;
+         while (i < token.size() && token[i]->type != ProcessedTokenType::BRKCL) {
+            // const var hat const
+            if (token.size() - i >= 4
+            && token[i]->type == ProcessedTokenType::CONST
+            && token[i+1]->type == ProcessedTokenType::VARID
+            && token[i+2]->type == ProcessedTokenType::HAT
+            && token[i+3]->type == ProcessedTokenType::CONST) {
+               std::string name = ((ProcessedVarIdToken*)token[i+1].get())->name;
+
+               assert (((ProcessedConstantToken*)token[i+3].get())->value == 2.0);
+
+               std::shared_ptr<QuadTerm> quadterm = std::shared_ptr<QuadTerm>(new QuadTerm());
+               quadterm->coef = ((ProcessedConstantToken*)token[i].get())->value;
+               quadterm->var1 = builder.getvarbyname(name);
+               quadterm->var2 = builder.getvarbyname(name);
+               expr->quadterms.push_back(quadterm);
+
+               i += 4;
+               continue;
+            }
+
+            // var hat const
+            if (token.size() - i >= 3
+            && token[i]->type == ProcessedTokenType::VARID
+            && token[i+1]->type == ProcessedTokenType::HAT
+            && token[i+2]->type == ProcessedTokenType::CONST) {
+               std::string name = ((ProcessedVarIdToken*)token[i].get())->name;
+
+               assert (((ProcessedConstantToken*)token[i+2].get())->value == 2.0);
+
+               std::shared_ptr<QuadTerm> quadterm = std::shared_ptr<QuadTerm>(new QuadTerm());
+               quadterm->coef = 1.0;
+               quadterm->var1 = builder.getvarbyname(name);
+               quadterm->var2 = builder.getvarbyname(name);
+               expr->quadterms.push_back(quadterm);
+
+               i += 3;
+               continue;
+            }
+
+            // const var asterisk var
+            if (token.size() - i >= 4
+            && token[i]->type == ProcessedTokenType::CONST
+            && token[i+1]->type == ProcessedTokenType::VARID
+            && token[i+2]->type == ProcessedTokenType::ASTERISK
+            && token[i+3]->type == ProcessedTokenType::VARID) {
+               std::string name1 = ((ProcessedVarIdToken*)token[i+1].get())->name;
+               std::string name2 = ((ProcessedVarIdToken*)token[i+3].get())->name;
+
+               std::shared_ptr<QuadTerm> quadterm = std::shared_ptr<QuadTerm>(new QuadTerm());
+               quadterm->coef = ((ProcessedConstantToken*)token[i].get())->value;
+               quadterm->var1 = builder.getvarbyname(name1);
+               quadterm->var2 = builder.getvarbyname(name2);
+               expr->quadterms.push_back(quadterm);
+
+               i += 4;
+               continue;
+            }
+
+            // var asterisk var
+            if (token.size() - i >= 3
+            && token[i]->type == ProcessedTokenType::VARID
+            && token[i+1]->type == ProcessedTokenType::ASTERISK
+            && token[i+2]->type == ProcessedTokenType::VARID) {
+               std::string name1 = ((ProcessedVarIdToken*)token[i].get())->name;
+               std::string name2 = ((ProcessedVarIdToken*)token[i+2].get())->name;
+
+               std::shared_ptr<QuadTerm> quadterm = std::shared_ptr<QuadTerm>(new QuadTerm());
+               quadterm->coef = 1.0;
+               quadterm->var1 = builder.getvarbyname(name1);
+               quadterm->var2 = builder.getvarbyname(name2);
+               expr->quadterms.push_back(quadterm);
+
+               i += 3;
+               continue;
+            }
+         }
+         assert(token.size() - i >= 3);
+         assert(token[i]->type == ProcessedTokenType::BRKCL);
+         assert(token[i+1]->type == ProcessedTokenType::SLASH);
+         assert(token[i+2]->type == ProcessedTokenType::CONST);
+         assert(((ProcessedConstantToken*)token[i+2].get())->value == 2.0);
+         i += 3;
+         continue;
+      }
+
+      break;
+   }
+}
+
+void Reader::processobjsec() {
+   printf("Processing %ld token in OBJ section\n", sectiontokens[LpSectionKeyword::OBJ].size());
+   builder.model.objective = std::shared_ptr<Expression>(new Expression);
+   unsigned int i = 0;   
+   parseexpression(sectiontokens[LpSectionKeyword::OBJ], builder.model.objective, i);
+   assert(i == sectiontokens[LpSectionKeyword::OBJ].size());
+}
+
+void Reader::processconsec() {
+   printf("Processing %ld token in CON section\n", sectiontokens[LpSectionKeyword::CON].size());
+
+   unsigned int i=0;
+   while (i<sectiontokens[LpSectionKeyword::CON].size()) {
+      std::shared_ptr<Constraint> con = std::shared_ptr<Constraint>(new Constraint);
+      parseexpression(sectiontokens[LpSectionKeyword::CON], con->expr, i);
+      assert(sectiontokens[LpSectionKeyword::CON].size() - i >= 2);
+      assert(sectiontokens[LpSectionKeyword::CON][i]->type == ProcessedTokenType::COMP);
+      assert(sectiontokens[LpSectionKeyword::CON][i+1]->type == ProcessedTokenType::CONST);
+      double value = ((ProcessedConstantToken*)sectiontokens[LpSectionKeyword::CON][i+1].get())->value;
+      switch (((ProcessedComparisonToken*)sectiontokens[LpSectionKeyword::CON][i].get())->dir) {
+         case LpComparisonType::EQ:
+            con->lowerbound = con->upperbound = value;
+            break;
+         case LpComparisonType::LEQ:
+            con->upperbound = value;
+            break;
+         case LpComparisonType::GEQ:
+            con->lowerbound = value;
+            break;
+         default:
+            assert(false);
+      }
+      i += 2;
+      builder.model.constraints.push_back(con);
+   }
+}
+
+void Reader::processboundssec() {
+   printf("Processing %ld token in BOUNDS section\n", sectiontokens[LpSectionKeyword::BOUNDS].size());
+
+   unsigned int i=0;
+   while (i<sectiontokens[LpSectionKeyword::BOUNDS].size()) {
+      // VAR free
+      if (sectiontokens[LpSectionKeyword::BOUNDS].size() - i >= 2
+         && sectiontokens[LpSectionKeyword::BOUNDS][i]->type == ProcessedTokenType::VARID
+         && sectiontokens[LpSectionKeyword::BOUNDS][i+1]->type == ProcessedTokenType::FREE) {
+         std::string name = ((ProcessedVarIdToken*)sectiontokens[LpSectionKeyword::BOUNDS][i].get())->name;
+         std::shared_ptr<Variable> var = builder.getvarbyname(name);
+         var->lowerbound = -std::numeric_limits<double>::infinity(); 
+         var->upperbound = std::numeric_limits<double>::infinity();
+         i += 2;
+      }
+
+      // CONST COMP VAR
+      if (sectiontokens[LpSectionKeyword::BOUNDS].size() -i >= 3
+      && sectiontokens[LpSectionKeyword::BOUNDS][i]->type == ProcessedTokenType::CONST
+      && sectiontokens[LpSectionKeyword::BOUNDS][i+1]->type == ProcessedTokenType::COMP
+      && sectiontokens[LpSectionKeyword::BOUNDS][i+2]->type == ProcessedTokenType::VARID) {
+         double value = ((ProcessedConstantToken*)sectiontokens[LpSectionKeyword::BOUNDS][i].get())->value;
+         std::string name = ((ProcessedVarIdToken*)sectiontokens[LpSectionKeyword::BOUNDS][i+2].get())->name;
+         std::shared_ptr<Variable> var = builder.getvarbyname(name);
+         LpComparisonType dir = ((ProcessedComparisonToken*)sectiontokens[LpSectionKeyword::BOUNDS][i+1].get())->dir;
+
+         assert(dir != LpComparisonType::L && dir != LpComparisonType::G);
+
+         switch (dir) {
+            case LpComparisonType::LEQ:
+               var->lowerbound = value;
+               break;
+            case LpComparisonType::GEQ:
+               var->upperbound = value;
+               break;
+            case LpComparisonType::EQ:
+               var->lowerbound = var->upperbound = value;
+               break;
+            default:
+               assert(false);
+         }
+         i += 3;
+         continue;
+      }
+
+      // VAR COMP CONST
+      if (sectiontokens[LpSectionKeyword::BOUNDS].size() -i >= 3
+      && sectiontokens[LpSectionKeyword::BOUNDS][i]->type == ProcessedTokenType::VARID
+      && sectiontokens[LpSectionKeyword::BOUNDS][i+1]->type == ProcessedTokenType::COMP
+      && sectiontokens[LpSectionKeyword::BOUNDS][i+2]->type == ProcessedTokenType::CONST) {
+         double value = ((ProcessedConstantToken*)sectiontokens[LpSectionKeyword::BOUNDS][i+2].get())->value;
+         std::string name = ((ProcessedVarIdToken*)sectiontokens[LpSectionKeyword::BOUNDS][i].get())->name;
+         std::shared_ptr<Variable> var = builder.getvarbyname(name);
+         LpComparisonType dir = ((ProcessedComparisonToken*)sectiontokens[LpSectionKeyword::BOUNDS][i+1].get())->dir;
+
+         assert(dir != LpComparisonType::L && dir != LpComparisonType::G);
+
+         switch (dir) {
+            case LpComparisonType::LEQ:
+               var->upperbound = value;
+               break;
+            case LpComparisonType::GEQ:
+               var->lowerbound = value;
+               break;
+            case LpComparisonType::EQ:
+               var->lowerbound = var->upperbound = value;
+               break;
+            default:
+               assert(false);
+         }
+         i += 3;
+         continue;
+      }
+      
+      // CONST COMP VAR COMP CONST
+      if (sectiontokens[LpSectionKeyword::BOUNDS].size() -i >= 5
+      && sectiontokens[LpSectionKeyword::BOUNDS][i]->type == ProcessedTokenType::CONST
+      && sectiontokens[LpSectionKeyword::BOUNDS][i+1]->type == ProcessedTokenType::COMP
+      && sectiontokens[LpSectionKeyword::BOUNDS][i+2]->type == ProcessedTokenType::VARID
+      && sectiontokens[LpSectionKeyword::BOUNDS][i+3]->type == ProcessedTokenType::COMP
+      && sectiontokens[LpSectionKeyword::BOUNDS][i+4]->type == ProcessedTokenType::CONST) {
+         assert(((ProcessedComparisonToken*)sectiontokens[LpSectionKeyword::BOUNDS][i+1].get())->dir == LpComparisonType::LEQ);
+         assert(((ProcessedComparisonToken*)sectiontokens[LpSectionKeyword::BOUNDS][i+3].get())->dir == LpComparisonType::LEQ);
+
+         double lb = ((ProcessedConstantToken*)sectiontokens[LpSectionKeyword::BOUNDS][i].get())->value;
+         double ub = ((ProcessedConstantToken*)sectiontokens[LpSectionKeyword::BOUNDS][i+4].get())->value;
+         
+         std::string name = ((ProcessedVarIdToken*)sectiontokens[LpSectionKeyword::BOUNDS][i+2].get())->name;
+         std::shared_ptr<Variable> var = builder.getvarbyname(name);
+
+         var->lowerbound = lb;
+         var->upperbound = ub;
+
+         i += 5;
+         continue;
+      }
+   }
+}
+
+void Reader::processbinsec() {
+   printf("Processing %ld token in BIN section\n", sectiontokens[LpSectionKeyword::BIN].size());
+   for (unsigned int i=0; i<sectiontokens[LpSectionKeyword::BIN].size(); i++) {
+      assert(sectiontokens[LpSectionKeyword::BIN][i]->type == ProcessedTokenType::VARID);
+      std::string name = ((ProcessedVarIdToken*)sectiontokens[LpSectionKeyword::BIN][i].get())->name;
+      std::shared_ptr<Variable> var = builder.getvarbyname(name);
+      var->type = VariableType::BINARY;
+   }
+}
+
+void Reader::processgensec() {
+   printf("Processing %ld token in GEN section\n", sectiontokens[LpSectionKeyword::GEN].size());
+   for (unsigned int i=0; i<sectiontokens[LpSectionKeyword::GEN].size(); i++) {
+      assert(sectiontokens[LpSectionKeyword::GEN][i]->type == ProcessedTokenType::VARID);
+      std::string name = ((ProcessedVarIdToken*)sectiontokens[LpSectionKeyword::GEN][i].get())->name;
+      std::shared_ptr<Variable> var = builder.getvarbyname(name);
+      var->type = VariableType::GENERAL;
+   }
+}
+
+void Reader::processsemisec() {
+   printf("Processing %ld token in SEMI section\n", sectiontokens[LpSectionKeyword::SEMI].size());
+   for (unsigned int i=0; i<sectiontokens[LpSectionKeyword::SEMI].size(); i++) {
+      assert(sectiontokens[LpSectionKeyword::SEMI][i]->type == ProcessedTokenType::VARID);
+      std::string name = ((ProcessedVarIdToken*)sectiontokens[LpSectionKeyword::SEMI][i].get())->name;
+      std::shared_ptr<Variable> var = builder.getvarbyname(name);
+      var->type = VariableType::SEMICONTINUOUS;
+   }
+}
+
+void Reader::processsossec() {
+   printf("Processing %ld token in SOS section\n", sectiontokens[LpSectionKeyword::SOS].size());
+   assert(sectiontokens[LpSectionKeyword::SOS].empty());
+}
+
+void Reader::processendsec() {
+   printf("Processing %ld token in END section\n", sectiontokens[LpSectionKeyword::END].size());
+   assert(sectiontokens[LpSectionKeyword::END].empty());
+}
+
+void Reader::processsections() {
+   processnonesec();
+   processobjsec();
+   processconsec();
+   processboundssec();
+   processgensec();
+   processbinsec();
+   processsemisec();
+   processsossec();
+   processendsec();
+}
+
+void Reader::splittokens() {
+   printf("Processing %ld processed token\n", processedtokens.size());
+   LpSectionKeyword currentsection = LpSectionKeyword::NONE;
+   
+   for (unsigned int i=0; i < processedtokens.size(); ++i) {
+      if (processedtokens[i]->type == ProcessedTokenType::SECID) {
+         currentsection = ((ProcessedTokenSectionKeyword*)processedtokens[i].get())->keyword;
+         
+         // make sure this section did not yet occur
+         assert(sectiontokens[currentsection].empty());
+      } else {
+         sectiontokens[currentsection].push_back(std::move(processedtokens[i]));
+      }
+   }
+}
+
 void Reader::processtokens() {
    unsigned int i = 0;
-   printf("Processing %d raw token\n", (int)rawtokens.size());
+   printf("Processing %ld raw token\n", rawtokens.size());
    while (i < this->rawtokens.size()) {
       fflush(stdout);
 
       // long section keyword semi-continuous
       if (rawtokens.size() - i >= 3 && rawtokens[i]->istype(RawTokenType::STR) && rawtokens[i+1]->istype(RawTokenType::MINUS) && rawtokens[i+2]->istype(RawTokenType::STR)) {
-         std::string temp = ((RawStringToken*)&rawtokens[i])->value + "-" + ((RawStringToken*)&this->rawtokens[i+2])->value;
+         std::string temp = ((RawStringToken*)rawtokens[i].get())->value + "-" + ((RawStringToken*)rawtokens[i+2].get())->value;
          LpSectionKeyword keyword = parsesectionkeyword(temp);
          if (keyword != LpSectionKeyword::NONE) {
             processedtokens.push_back(std::unique_ptr<ProcessedToken>(new ProcessedTokenSectionKeyword(keyword)));
@@ -244,7 +607,7 @@ void Reader::processtokens() {
 
       // long section keyword subject to/such that
       if (rawtokens.size() - i >= 2 && rawtokens[i]->istype(RawTokenType::STR) && rawtokens[i+1]->istype(RawTokenType::STR)) {
-         std::string temp = ((RawStringToken*)&rawtokens[i])->value + " " + ((RawStringToken*)&this->rawtokens[i+1])->value;
+         std::string temp = ((RawStringToken*)rawtokens[i].get())->value + " " + ((RawStringToken*)rawtokens[i+1].get())->value;
          LpSectionKeyword keyword = parsesectionkeyword(temp);
          if (keyword != LpSectionKeyword::NONE) {
             processedtokens.push_back(std::unique_ptr<ProcessedToken>(new ProcessedTokenSectionKeyword(keyword)));
@@ -331,18 +694,6 @@ void Reader::processtokens() {
          continue;
       }
 
-      // lineend
-      if (rawtokens[i]->istype(RawTokenType::LNEND)) {
-         i++;
-         continue;
-      }
-
-      // whitespace
-      if (rawtokens[i]->istype(RawTokenType::WHITE)) {
-         i++;
-         continue;
-      }
-
       // [
       if (rawtokens[i]->istype(RawTokenType::BRKOP)) {
          processedtokens.push_back(std::unique_ptr<ProcessedToken>(new ProcessedToken(ProcessedTokenType::BRKOP)));
@@ -415,13 +766,12 @@ void Reader::processtokens() {
 
       // FILEEND
       if (rawtokens[i]->istype(RawTokenType::FLEND)) {
-         processedtokens.push_back(std::unique_ptr<ProcessedToken>(new ProcessedToken(ProcessedTokenType::FLEND)));
          i++;
          continue;
       }
 
-      // catch all
-      printf("\n\n stuck on %d: RawTokenType type %d \n", i, (int)rawtokens[i]->type);
+      // catch all unknown symbols
+      assert(false);
       break;
    }
 }
@@ -431,15 +781,15 @@ void Reader::tokenize() {
    this->linebufferrefill = true;
    bool done = false;
    while(true) {
-      this->readnexttoken(&done);
-      if (this->rawtokens.size() && this->rawtokens.back()->type == RawTokenType::FLEND) {
+      this->readnexttoken(done);
+      if (this->rawtokens.size() >= 1 && this->rawtokens.back()->type == RawTokenType::FLEND) {
          break;
       }
    }
 }
 
-void Reader::readnexttoken(bool* done) {
-   *done = false;
+void Reader::readnexttoken(bool& done) {
+   done = false;
    if (this->linebufferrefill) {
       char* eof = fgets(this->linebuffer, LP_MAX_LINE_LENGTH+1, this->file);
       this->linebufferpos = this->linebuffer;
@@ -448,7 +798,7 @@ void Reader::readnexttoken(bool* done) {
       // fgets returns NULL if end of file reached (EOF following a \n)
       if (eof == NULL) {
          this->rawtokens.push_back(std::unique_ptr<RawToken>(new RawToken(RawTokenType::FLEND)));
-         *done = true;
+         done = true;
          return;
       }
    }
@@ -459,7 +809,6 @@ void Reader::readnexttoken(bool* done) {
    switch (nextchar) {
       // check for comment
       case '\\':
-         this->rawtokens.push_back(std::unique_ptr<RawToken>(new RawToken(RawTokenType::LNEND)));
          this->linebufferrefill = true;
          return;
       
@@ -532,20 +881,18 @@ void Reader::readnexttoken(bool* done) {
       // check for whitespace
       case ' ':
       case '\t':
-         this->rawtokens.push_back(std::unique_ptr<RawToken>(new RawToken(RawTokenType::WHITE)));
          this->linebufferpos++;
          return;
 
       // check for line end
       case '\n':
-         this->rawtokens.push_back(std::unique_ptr<RawToken>(new RawToken(RawTokenType::LNEND)));
          this->linebufferrefill = true;
          return;
 
       // check for file end (EOF at end of some line)
       case '\0': 
          this->rawtokens.push_back(std::unique_ptr<RawToken>(new RawToken(RawTokenType::FLEND)));
-         *done = true;
+         done = true;
          return;
    }
    
@@ -569,6 +916,5 @@ void Reader::readnexttoken(bool* done) {
       return;
    }
    
-   printf("ERROR\n");
-   exit(0);
+   assert(false);
 }
