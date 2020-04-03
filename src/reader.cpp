@@ -580,6 +580,19 @@ void Reader::splittokens() {
       if (processedtokens[i]->type == ProcessedTokenType::SECID) {
          currentsection = ((ProcessedTokenSectionKeyword*)processedtokens[i].get())->keyword;
          
+         if (((ProcessedTokenSectionKeyword*)processedtokens[i].get())->keyword == LpSectionKeyword::OBJ) {
+            switch(((ProcessedTokenObjectiveSectionKeyword*)processedtokens[i].get())->objsense) {
+               case LpObjectiveSectionKeywordType::MIN:
+                  builder.model.sense = ObjectiveSense::MIN;
+                  break;
+               case LpObjectiveSectionKeywordType::MAX:
+                  builder.model.sense = ObjectiveSense::MAX;
+                  break;
+               default:
+                  assert(false);
+            }
+         }
+
          // make sure this section did not yet occur
          assert(sectiontokens[currentsection].empty());
       } else {

@@ -15,6 +15,11 @@ enum class VariableType {
    SEMICONTINUOUS
 };
 
+enum class ObjectiveSense {
+   MIN,
+   MAX
+};
+
 class Variable {
 public:
    VariableType type = VariableType::CONTINUOUS;
@@ -58,6 +63,7 @@ public:
 class Model {
 public:
    std::shared_ptr<Expression> objective;
+   ObjectiveSense sense;
    std::vector<std::shared_ptr<Constraint>> constraints;
 };
 
