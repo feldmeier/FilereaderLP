@@ -226,6 +226,22 @@ LpSectionKeyword parsesectionkeyword(const std::string& str) {
       return LpSectionKeyword::BOUNDS;
    }
 
+   if (iskeyword(str, LP_KEYWORD_BIN, LP_KEYWORD_BIN_N)) {
+      return LpSectionKeyword::BIN;
+   }
+
+   if (iskeyword(str, LP_KEYWORD_GEN, LP_KEYWORD_GEN_N)) {
+      return LpSectionKeyword::GEN;
+   }
+
+   if (iskeyword(str, LP_KEYWORD_SEMI, LP_KEYWORD_SEMI_N)) {
+      return LpSectionKeyword::SEMI;
+   }
+
+   if (iskeyword(str, LP_KEYWORD_SOS, LP_KEYWORD_SOS_N)) {
+      return LpSectionKeyword::SOS;
+   }
+
    if (iskeyword(str, LP_KEYWORD_END, LP_KEYWORD_END_N)) {
       return LpSectionKeyword::END;
    }
