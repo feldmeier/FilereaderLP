@@ -167,19 +167,21 @@ private:
    void processsemisec();
    void processsossec();
    void processendsec();
-   void parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token, std::shared_ptr<Expression> expr, unsigned int& i);
+   void parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& tokens, std::shared_ptr<Expression> expr, unsigned int& i);
 
 public:
-   Reader(FILE* f) : file(f) {};
-   void read();
+   Reader(std::string filename) : file(fopen(filename.c_str(), "r")) {};
+
+   ~Reader() {
+      fclose(file);
+   }
+
+   Model read();
 };
 
-void readinstance(std::string filename) {
-   FILE* file = fopen(filename.c_str(), "r");
-   Reader reader(file);
-   reader.read();
-
-   fclose(file);
+Model readinstance(std::string filename) {
+   Reader reader(filename);
+   return reader.read();
 }
 
 bool isstrequalnocase(const std::string str1, const std::string str2) {
@@ -249,33 +251,35 @@ LpSectionKeyword parsesectionkeyword(const std::string& str) {
    return LpSectionKeyword::NONE;
 }
 
-void Reader::read() {
+Model Reader::read() {
    tokenize();
    processtokens();
    splittokens();
    processsections();
+
+   return builder.model;
 }
 
 void Reader::processnonesec() {
-   printf("Processing %ld token in NONE section\n", sectiontokens[LpSectionKeyword::NONE].size());
+   printf("Processing %ld tokens in NONE section\n", sectiontokens[LpSectionKeyword::NONE].size());
    assert(sectiontokens[LpSectionKeyword::NONE].empty());
 }
 
-void Reader::parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token, std::shared_ptr<Expression> expr, unsigned int& i) {
-   if (token.size() - i >= 1 && token[0]->type == ProcessedTokenType::CONID) {
-      expr->name = ((ProcessedConsIdToken*)token[0].get())->name;
+void Reader::parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& tokens, std::shared_ptr<Expression> expr, unsigned int& i) {
+   if (tokens.size() - i >= 1 && tokens[0]->type == ProcessedTokenType::CONID) {
+      expr->name = ((ProcessedConsIdToken*)tokens[0].get())->name;
       i++;
    }
 
-   while (i<token.size()) {
+   while (i<tokens.size()) {
       // const var
-      if (token.size() - i >= 2
-      && token[i]->type == ProcessedTokenType::CONST
-      && token[i+1]->type == ProcessedTokenType::VARID) {
-         std::string name = ((ProcessedVarIdToken*)token[i+1].get())->name;
+      if (tokens.size() - i >= 2
+      && tokens[i]->type == ProcessedTokenType::CONST
+      && tokens[i+1]->type == ProcessedTokenType::VARID) {
+         std::string name = ((ProcessedVarIdToken*)tokens[i+1].get())->name;
          
          std::shared_ptr<LinTerm> linterm = std::shared_ptr<LinTerm>(new LinTerm());
-         linterm->coef = ((ProcessedConstantToken*)token[i].get())->value;
+         linterm->coef = ((ProcessedConstantToken*)tokens[i].get())->value;
          linterm->var = builder.getvarbyname(name);
          expr->linterms.push_back(linterm);
 
@@ -284,15 +288,15 @@ void Reader::parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token
       }
 
       // const
-      if (token.size() - i  >= 1 && token[i]->type == ProcessedTokenType::CONST) {
-         expr->offset = ((ProcessedConstantToken*)token[i].get())->value;
+      if (tokens.size() - i  >= 1 && tokens[i]->type == ProcessedTokenType::CONST) {
+         expr->offset = ((ProcessedConstantToken*)tokens[i].get())->value;
          i++;
          continue;
       }
       
       // var
-      if (token.size() - i  >= 1 && token[i]->type == ProcessedTokenType::VARID) {
-         std::string name = ((ProcessedVarIdToken*)token[i].get())->name;
+      if (tokens.size() - i  >= 1 && tokens[i]->type == ProcessedTokenType::VARID) {
+         std::string name = ((ProcessedVarIdToken*)tokens[i].get())->name;
          
          std::shared_ptr<LinTerm> linterm = std::shared_ptr<LinTerm>(new LinTerm());
          linterm->coef = 1.0;
@@ -304,21 +308,21 @@ void Reader::parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token
       }
 
       // quadratic expression
-      if (token.size() - i >= 2 && token[i]->type == ProcessedTokenType::BRKOP) {
+      if (tokens.size() - i >= 2 && tokens[i]->type == ProcessedTokenType::BRKOP) {
          i++;
-         while (i < token.size() && token[i]->type != ProcessedTokenType::BRKCL) {
+         while (i < tokens.size() && tokens[i]->type != ProcessedTokenType::BRKCL) {
             // const var hat const
-            if (token.size() - i >= 4
-            && token[i]->type == ProcessedTokenType::CONST
-            && token[i+1]->type == ProcessedTokenType::VARID
-            && token[i+2]->type == ProcessedTokenType::HAT
-            && token[i+3]->type == ProcessedTokenType::CONST) {
-               std::string name = ((ProcessedVarIdToken*)token[i+1].get())->name;
+            if (tokens.size() - i >= 4
+            && tokens[i]->type == ProcessedTokenType::CONST
+            && tokens[i+1]->type == ProcessedTokenType::VARID
+            && tokens[i+2]->type == ProcessedTokenType::HAT
+            && tokens[i+3]->type == ProcessedTokenType::CONST) {
+               std::string name = ((ProcessedVarIdToken*)tokens[i+1].get())->name;
 
-               assert (((ProcessedConstantToken*)token[i+3].get())->value == 2.0);
+               assert (((ProcessedConstantToken*)tokens[i+3].get())->value == 2.0);
 
                std::shared_ptr<QuadTerm> quadterm = std::shared_ptr<QuadTerm>(new QuadTerm());
-               quadterm->coef = ((ProcessedConstantToken*)token[i].get())->value;
+               quadterm->coef = ((ProcessedConstantToken*)tokens[i].get())->value;
                quadterm->var1 = builder.getvarbyname(name);
                quadterm->var2 = builder.getvarbyname(name);
                expr->quadterms.push_back(quadterm);
@@ -328,13 +332,13 @@ void Reader::parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token
             }
 
             // var hat const
-            if (token.size() - i >= 3
-            && token[i]->type == ProcessedTokenType::VARID
-            && token[i+1]->type == ProcessedTokenType::HAT
-            && token[i+2]->type == ProcessedTokenType::CONST) {
-               std::string name = ((ProcessedVarIdToken*)token[i].get())->name;
+            if (tokens.size() - i >= 3
+            && tokens[i]->type == ProcessedTokenType::VARID
+            && tokens[i+1]->type == ProcessedTokenType::HAT
+            && tokens[i+2]->type == ProcessedTokenType::CONST) {
+               std::string name = ((ProcessedVarIdToken*)tokens[i].get())->name;
 
-               assert (((ProcessedConstantToken*)token[i+2].get())->value == 2.0);
+               assert (((ProcessedConstantToken*)tokens[i+2].get())->value == 2.0);
 
                std::shared_ptr<QuadTerm> quadterm = std::shared_ptr<QuadTerm>(new QuadTerm());
                quadterm->coef = 1.0;
@@ -347,16 +351,16 @@ void Reader::parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token
             }
 
             // const var asterisk var
-            if (token.size() - i >= 4
-            && token[i]->type == ProcessedTokenType::CONST
-            && token[i+1]->type == ProcessedTokenType::VARID
-            && token[i+2]->type == ProcessedTokenType::ASTERISK
-            && token[i+3]->type == ProcessedTokenType::VARID) {
-               std::string name1 = ((ProcessedVarIdToken*)token[i+1].get())->name;
-               std::string name2 = ((ProcessedVarIdToken*)token[i+3].get())->name;
+            if (tokens.size() - i >= 4
+            && tokens[i]->type == ProcessedTokenType::CONST
+            && tokens[i+1]->type == ProcessedTokenType::VARID
+            && tokens[i+2]->type == ProcessedTokenType::ASTERISK
+            && tokens[i+3]->type == ProcessedTokenType::VARID) {
+               std::string name1 = ((ProcessedVarIdToken*)tokens[i+1].get())->name;
+               std::string name2 = ((ProcessedVarIdToken*)tokens[i+3].get())->name;
 
                std::shared_ptr<QuadTerm> quadterm = std::shared_ptr<QuadTerm>(new QuadTerm());
-               quadterm->coef = ((ProcessedConstantToken*)token[i].get())->value;
+               quadterm->coef = ((ProcessedConstantToken*)tokens[i].get())->value;
                quadterm->var1 = builder.getvarbyname(name1);
                quadterm->var2 = builder.getvarbyname(name2);
                expr->quadterms.push_back(quadterm);
@@ -366,12 +370,12 @@ void Reader::parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token
             }
 
             // var asterisk var
-            if (token.size() - i >= 3
-            && token[i]->type == ProcessedTokenType::VARID
-            && token[i+1]->type == ProcessedTokenType::ASTERISK
-            && token[i+2]->type == ProcessedTokenType::VARID) {
-               std::string name1 = ((ProcessedVarIdToken*)token[i].get())->name;
-               std::string name2 = ((ProcessedVarIdToken*)token[i+2].get())->name;
+            if (tokens.size() - i >= 3
+            && tokens[i]->type == ProcessedTokenType::VARID
+            && tokens[i+1]->type == ProcessedTokenType::ASTERISK
+            && tokens[i+2]->type == ProcessedTokenType::VARID) {
+               std::string name1 = ((ProcessedVarIdToken*)tokens[i].get())->name;
+               std::string name2 = ((ProcessedVarIdToken*)tokens[i+2].get())->name;
 
                std::shared_ptr<QuadTerm> quadterm = std::shared_ptr<QuadTerm>(new QuadTerm());
                quadterm->coef = 1.0;
@@ -383,11 +387,11 @@ void Reader::parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token
                continue;
             }
          }
-         assert(token.size() - i >= 3);
-         assert(token[i]->type == ProcessedTokenType::BRKCL);
-         assert(token[i+1]->type == ProcessedTokenType::SLASH);
-         assert(token[i+2]->type == ProcessedTokenType::CONST);
-         assert(((ProcessedConstantToken*)token[i+2].get())->value == 2.0);
+         assert(tokens.size() - i >= 3);
+         assert(tokens[i]->type == ProcessedTokenType::BRKCL);
+         assert(tokens[i+1]->type == ProcessedTokenType::SLASH);
+         assert(tokens[i+2]->type == ProcessedTokenType::CONST);
+         assert(((ProcessedConstantToken*)tokens[i+2].get())->value == 2.0);
          i += 3;
          continue;
       }
@@ -397,7 +401,7 @@ void Reader::parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token
 }
 
 void Reader::processobjsec() {
-   printf("Processing %ld token in OBJ section\n", sectiontokens[LpSectionKeyword::OBJ].size());
+   printf("Processing %ld tokens in OBJ section\n", sectiontokens[LpSectionKeyword::OBJ].size());
    builder.model.objective = std::shared_ptr<Expression>(new Expression);
    unsigned int i = 0;   
    parseexpression(sectiontokens[LpSectionKeyword::OBJ], builder.model.objective, i);
@@ -405,7 +409,7 @@ void Reader::processobjsec() {
 }
 
 void Reader::processconsec() {
-   printf("Processing %ld token in CON section\n", sectiontokens[LpSectionKeyword::CON].size());
+   printf("Processing %ld tokens in CON section\n", sectiontokens[LpSectionKeyword::CON].size());
 
    unsigned int i=0;
    while (i<sectiontokens[LpSectionKeyword::CON].size()) {
@@ -434,7 +438,7 @@ void Reader::processconsec() {
 }
 
 void Reader::processboundssec() {
-   printf("Processing %ld token in BOUNDS section\n", sectiontokens[LpSectionKeyword::BOUNDS].size());
+   printf("Processing %ld tokens in BOUNDS section\n", sectiontokens[LpSectionKeyword::BOUNDS].size());
 
    unsigned int i=0;
    while (i<sectiontokens[LpSectionKeyword::BOUNDS].size()) {
@@ -533,7 +537,7 @@ void Reader::processboundssec() {
 }
 
 void Reader::processbinsec() {
-   printf("Processing %ld token in BIN section\n", sectiontokens[LpSectionKeyword::BIN].size());
+   printf("Processing %ld tokens in BIN section\n", sectiontokens[LpSectionKeyword::BIN].size());
    for (unsigned int i=0; i<sectiontokens[LpSectionKeyword::BIN].size(); i++) {
       assert(sectiontokens[LpSectionKeyword::BIN][i]->type == ProcessedTokenType::VARID);
       std::string name = ((ProcessedVarIdToken*)sectiontokens[LpSectionKeyword::BIN][i].get())->name;
@@ -543,7 +547,7 @@ void Reader::processbinsec() {
 }
 
 void Reader::processgensec() {
-   printf("Processing %ld token in GEN section\n", sectiontokens[LpSectionKeyword::GEN].size());
+   printf("Processing %ld tokens in GEN section\n", sectiontokens[LpSectionKeyword::GEN].size());
    for (unsigned int i=0; i<sectiontokens[LpSectionKeyword::GEN].size(); i++) {
       assert(sectiontokens[LpSectionKeyword::GEN][i]->type == ProcessedTokenType::VARID);
       std::string name = ((ProcessedVarIdToken*)sectiontokens[LpSectionKeyword::GEN][i].get())->name;
@@ -553,7 +557,7 @@ void Reader::processgensec() {
 }
 
 void Reader::processsemisec() {
-   printf("Processing %ld token in SEMI section\n", sectiontokens[LpSectionKeyword::SEMI].size());
+   printf("Processing %ld tokens in SEMI section\n", sectiontokens[LpSectionKeyword::SEMI].size());
    for (unsigned int i=0; i<sectiontokens[LpSectionKeyword::SEMI].size(); i++) {
       assert(sectiontokens[LpSectionKeyword::SEMI][i]->type == ProcessedTokenType::VARID);
       std::string name = ((ProcessedVarIdToken*)sectiontokens[LpSectionKeyword::SEMI][i].get())->name;
@@ -563,13 +567,13 @@ void Reader::processsemisec() {
 }
 
 void Reader::processsossec() {
-   printf("Processing %ld token in SOS section\n", sectiontokens[LpSectionKeyword::SOS].size());
+   printf("Processing %ld tokens in SOS section\n", sectiontokens[LpSectionKeyword::SOS].size());
    // TODO
    assert(sectiontokens[LpSectionKeyword::SOS].empty());
 }
 
 void Reader::processendsec() {
-   printf("Processing %ld token in END section\n", sectiontokens[LpSectionKeyword::END].size());
+   printf("Processing %ld tokens in END section\n", sectiontokens[LpSectionKeyword::END].size());
    assert(sectiontokens[LpSectionKeyword::END].empty());
 }
 
@@ -586,7 +590,7 @@ void Reader::processsections() {
 }
 
 void Reader::splittokens() {
-   printf("Processing %ld processed token\n", processedtokens.size());
+   printf("Processing %ld processed tokens\n", processedtokens.size());
    LpSectionKeyword currentsection = LpSectionKeyword::NONE;
    
    for (unsigned int i=0; i < processedtokens.size(); ++i) {
@@ -616,7 +620,7 @@ void Reader::splittokens() {
 
 void Reader::processtokens() {
    unsigned int i = 0;
-   printf("Processing %ld raw token\n", rawtokens.size());
+   printf("Processing %ld raw tokens\n", rawtokens.size());
    while (i < this->rawtokens.size()) {
       fflush(stdout);
 
@@ -933,7 +937,7 @@ void Reader::readnexttoken(bool& done) {
    }
 
    // assume it's an (section/variable/constraint) idenifier
-   char stringbuffer[LP_MAX_NAME_LENGTH];
+   char stringbuffer[LP_MAX_NAME_LENGTH+1];
    nread = sscanf(this->linebufferpos, "%[^][\t\n\\:+<>^= /-]%n",
                  stringbuffer, &ncharconsumed);
    if (nread == 1) {

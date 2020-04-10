@@ -4,7 +4,7 @@ set(sources
 
 set(headers
    builder.hpp
-   instance.hpp
+   model.hpp
    reader.hpp
 )
 

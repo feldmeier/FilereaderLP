@@ -3,7 +3,9 @@
 
 #include <string>
 
-void readinstance(std::string filename);
-void writeinstance(std::string filename);
+#include "model.hpp"
+
+Model readinstance(std::string filename);
+void writeinstance(Model&, std::string filename);
 
 #endif
