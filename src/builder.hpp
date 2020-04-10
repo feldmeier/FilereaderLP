@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "instance.hpp"
+
 enum class VariableType {
    CONTINUOUS,
    BINARY,
@@ -20,8 +22,7 @@ enum class ObjectiveSense {
    MAX
 };
 
-class Variable {
-public:
+struct Variable {
    VariableType type = VariableType::CONTINUOUS;
    double lowerbound = 0.0;
    double upperbound = std::numeric_limits<double>::infinity();
@@ -30,29 +31,25 @@ public:
    Variable(std::string n="") : name(n) {};
 };
 
-class LinTerm {
-public:
+struct LinTerm {
    std::shared_ptr<Variable> var;
    double coef;
 };
 
-class QuadTerm {
-public:
+struct QuadTerm {
    std::shared_ptr<Variable> var1;
    std::shared_ptr<Variable> var2;
    double coef;
 };
 
-class Expression {
-public:
+struct Expression {
    std::vector<std::shared_ptr<LinTerm>> linterms;
    std::vector<std::shared_ptr<QuadTerm>> quadterms; 
    double offset;
    std::string name = "";
 };
 
-class Constraint {
-public:
+struct Constraint {
    double lowerbound = -std::numeric_limits<double>::infinity();
    double upperbound = std::numeric_limits<double>::infinity();
    std::shared_ptr<Expression> expr;
@@ -60,15 +57,13 @@ public:
    Constraint() : expr(std::shared_ptr<Expression>(new Expression)) {};
 };
 
-class Model {
-public:
+struct Model {
    std::shared_ptr<Expression> objective;
    ObjectiveSense sense;
    std::vector<std::shared_ptr<Constraint>> constraints;
 };
 
-class Builder {
-public:   
+struct Builder { 
    std::map<std::string, std::shared_ptr<Variable>> variables; 
 
    Model model;

@@ -55,8 +55,7 @@ enum class RawTokenType {
    ASTERISK
 };
 
-class RawToken {
-public:
+struct RawToken {
    RawTokenType type;
    inline bool istype(RawTokenType t) {
       return this->type == t;
@@ -64,14 +63,12 @@ public:
    RawToken(RawTokenType t) : type(t) {} ;
 };
 
-class RawStringToken : public RawToken {
-public:
+struct RawStringToken : RawToken {
    std::string value;
    RawStringToken(std::string v) : RawToken(RawTokenType::STR), value(v) {};
 };
 
-class RawConstantToken : public RawToken {
-public:
+struct RawConstantToken : RawToken {
    double value;
    RawConstantToken(double v) : RawToken(RawTokenType::CONS), value(v) {};
 };
@@ -108,44 +105,37 @@ enum class LpObjectiveSectionKeywordType { NONE, MIN, MAX };
 
 enum class LpComparisonType { LEQ, L, EQ, G, GEQ };
 
-class ProcessedToken {
-public:
+struct ProcessedToken {
    ProcessedTokenType type;
    ProcessedToken(ProcessedTokenType t) : type(t) {};
 };
 
-class ProcessedTokenSectionKeyword : public ProcessedToken {
-public:
+struct ProcessedTokenSectionKeyword : ProcessedToken {
    LpSectionKeyword keyword;
    ProcessedTokenSectionKeyword(LpSectionKeyword k) : ProcessedToken(ProcessedTokenType::SECID), keyword(k) {};
 };
 
-class ProcessedTokenObjectiveSectionKeyword : public ProcessedTokenSectionKeyword {
-public:
+struct ProcessedTokenObjectiveSectionKeyword : ProcessedTokenSectionKeyword {
    LpObjectiveSectionKeywordType objsense;
    ProcessedTokenObjectiveSectionKeyword(LpObjectiveSectionKeywordType os) : ProcessedTokenSectionKeyword(LpSectionKeyword::OBJ), objsense(os) {};
 };
 
-class ProcessedConsIdToken : public ProcessedToken {
-public:
+struct ProcessedConsIdToken : ProcessedToken {
    std::string name;
    ProcessedConsIdToken(std::string n) : ProcessedToken(ProcessedTokenType::CONID), name(n) {};
 };
 
-class ProcessedVarIdToken : public ProcessedToken {
-public:
+struct ProcessedVarIdToken : ProcessedToken {
    std::string name;
    ProcessedVarIdToken(std::string n) : ProcessedToken(ProcessedTokenType::VARID), name(n) {};
 };
 
-class ProcessedConstantToken : public ProcessedToken {
-public:
+struct ProcessedConstantToken : ProcessedToken {
    double value;
    ProcessedConstantToken(double v) : ProcessedToken(ProcessedTokenType::CONST), value(v) {};
 };
 
-class ProcessedComparisonToken : public ProcessedToken {
-public:
+struct ProcessedComparisonToken : ProcessedToken {
    LpComparisonType dir;
    ProcessedComparisonToken(LpComparisonType d) : ProcessedToken(ProcessedTokenType::COMP), dir(d) {};
 };
@@ -163,8 +153,6 @@ private:
 
    Builder builder;
 
-public:
-   Reader(FILE* f) : file(f) {};
    void tokenize();
    void readnexttoken(bool& done);
    void processtokens();
@@ -180,15 +168,16 @@ public:
    void processsossec();
    void processendsec();
    void parseexpression(std::vector<std::unique_ptr<ProcessedToken>>& token, std::shared_ptr<Expression> expr, unsigned int& i);
+
+public:
+   Reader(FILE* f) : file(f) {};
+   void read();
 };
 
 void readinstance(std::string filename) {
    FILE* file = fopen(filename.c_str(), "r");
    Reader reader(file);
-   reader.tokenize();
-   reader.processtokens();
-   reader.splittokens();
-   reader.processsections();
+   reader.read();
 
    fclose(file);
 }
@@ -242,6 +231,13 @@ LpSectionKeyword parsesectionkeyword(const std::string& str) {
    }
 
    return LpSectionKeyword::NONE;
+}
+
+void Reader::read() {
+   tokenize();
+   processtokens();
+   splittokens();
+   processsections();
 }
 
 void Reader::processnonesec() {
@@ -438,7 +434,7 @@ void Reader::processboundssec() {
       }
 
       // CONST COMP VAR
-      if (sectiontokens[LpSectionKeyword::BOUNDS].size() -i >= 3
+      if (sectiontokens[LpSectionKeyword::BOUNDS].size() - i >= 3
       && sectiontokens[LpSectionKeyword::BOUNDS][i]->type == ProcessedTokenType::CONST
       && sectiontokens[LpSectionKeyword::BOUNDS][i+1]->type == ProcessedTokenType::COMP
       && sectiontokens[LpSectionKeyword::BOUNDS][i+2]->type == ProcessedTokenType::VARID) {
@@ -552,6 +548,7 @@ void Reader::processsemisec() {
 
 void Reader::processsossec() {
    printf("Processing %ld token in SOS section\n", sectiontokens[LpSectionKeyword::SOS].size());
+   // TODO
    assert(sectiontokens[LpSectionKeyword::SOS].empty());
 }
 
@@ -580,7 +577,7 @@ void Reader::splittokens() {
       if (processedtokens[i]->type == ProcessedTokenType::SECID) {
          currentsection = ((ProcessedTokenSectionKeyword*)processedtokens[i].get())->keyword;
          
-         if (((ProcessedTokenSectionKeyword*)processedtokens[i].get())->keyword == LpSectionKeyword::OBJ) {
+         if (currentsection == LpSectionKeyword::OBJ) {
             switch(((ProcessedTokenObjectiveSectionKeyword*)processedtokens[i].get())->objsense) {
                case LpObjectiveSectionKeywordType::MIN:
                   builder.model.sense = ObjectiveSense::MIN;

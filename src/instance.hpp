@@ -3,16 +3,17 @@
 
 #include <vector>
 
-class Instance {
+struct Instance {
    unsigned int numvar;
    unsigned int numlincon;
-   unsigned int numquadcon;
    std::vector<double> c;
-   std::vector<unsigned int> qstart;
-   std::vector<unsigned int> qindex;
-   std::vector<double> qvalue;
-   // TODO 
-
+   std::vector<double> lb;
+   std::vector<double> ub;
+   std::vector<unsigned int> astart;
+   std::vector<unsigned int> aindex;
+   std::vector<double> avalue;
+   std::vector<double> rlb;
+   std::vector<double> rub;
 };
 
 #endif
