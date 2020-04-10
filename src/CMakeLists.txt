@@ -9,7 +9,7 @@ set(headers
 )
 
 add_library(libreaderlp ${sources})
-target_link_libraries(libreaderlp )
+set_property(TARGET libreaderlp PROPERTY CXX_STANDARD 11)
 
 # install the header files of readerlp
 foreach ( file ${headers} )
