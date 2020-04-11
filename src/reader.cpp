@@ -12,17 +12,17 @@
 #define LP_MAX_NAME_LENGTH 255
 #define LP_MAX_LINE_LENGTH 560
 
-const char* const LP_KEYWORD_MIN[] = {"minimize", "min", "minimum"};
-const char* const LP_KEYWORD_MAX[] = {"maximize", "max", "maximum"};
-const char* const LP_KEYWORD_ST[] = {"subject to", "such that", "st", "s.t."};
-const char* const LP_KEYWORD_BOUNDS[] = {"bounds", "bound"};
-const char* const LP_KEYWORD_INF[] = {"infinity", "inf"};
-const char* const LP_KEYWORD_FREE[] = {"free"};
-const char* const LP_KEYWORD_GEN[] = {"general", "generals", "gen"};
-const char* const LP_KEYWORD_BIN[] = {"binary", "binaries", "bin"};
-const char* const LP_KEYWORD_SEMI[] = {"semi-continuous", "semi", "semis"};
-const char* const LP_KEYWORD_SOS[] = {"sos"};
-const char* const LP_KEYWORD_END[] = {"end"};
+const std::string LP_KEYWORD_MIN[] = {"minimize", "min", "minimum"};
+const std::string LP_KEYWORD_MAX[] = {"maximize", "max", "maximum"};
+const std::string LP_KEYWORD_ST[] = {"subject to", "such that", "st", "s.t."};
+const std::string LP_KEYWORD_BOUNDS[] = {"bounds", "bound"};
+const std::string LP_KEYWORD_INF[] = {"infinity", "inf"};
+const std::string LP_KEYWORD_FREE[] = {"free"};
+const std::string LP_KEYWORD_GEN[] = {"general", "generals", "gen"};
+const std::string LP_KEYWORD_BIN[] = {"binary", "binaries", "bin"};
+const std::string LP_KEYWORD_SEMI[] = {"semi-continuous", "semi", "semis"};
+const std::string LP_KEYWORD_SOS[] = {"sos"};
+const std::string LP_KEYWORD_END[] = {"end"};
 
 const int LP_KEYWORD_MIN_N = 3;
 const int LP_KEYWORD_MAX_N = 3;
@@ -194,7 +194,7 @@ bool isstrequalnocase(const std::string str1, const std::string str2) {
     return true;
 }
 
-bool iskeyword(const std::string str, const char* const* keywords, const int nkeywords) {
+bool iskeyword(const std::string str, const std::string* keywords, const int nkeywords) {
    for (int i=0; i<nkeywords; i++) {
       if (isstrequalnocase(str, keywords[i])) {
          return true;
