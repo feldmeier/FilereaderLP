@@ -14,6 +14,14 @@ void test_validqplibfile() {
    Model m = readinstance(std::string(PROJECT_DIR) + "/check/QPLIB_8938.lp");
 }
 
+void test_qap10() {
+   Model m = readinstance(std::string(PROJECT_DIR) + "/check/qap10.lp");
+}
+
+TEST_CASE( "", "" ) {
+    REQUIRE_NOTHROW( test_qap10() );
+}
+
 TEST_CASE( "", "" ) {
    REQUIRE_THROWS_AS( test_filecontentgarbage() , std::invalid_argument );
 }

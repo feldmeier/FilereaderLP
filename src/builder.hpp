@@ -15,6 +15,7 @@ struct Builder {
    std::shared_ptr<Variable> getvarbyname(std::string name) {
       if (variables.count(name) == 0) {
          variables[name] = std::shared_ptr<Variable>(new Variable(name));
+         model.variables.push_back(variables[name]);
       }
       return variables[name];
    }

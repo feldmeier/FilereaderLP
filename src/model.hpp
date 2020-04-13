@@ -57,6 +57,7 @@ struct Model {
    std::shared_ptr<Expression> objective;
    ObjectiveSense sense;
    std::vector<std::shared_ptr<Constraint>> constraints;
+   std::vector<std::shared_ptr<Variable>> variables;
 };
 
 #endif
