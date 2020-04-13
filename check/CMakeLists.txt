@@ -1,4 +1,8 @@
-include(CTest)
+include_directories(${CMAKE_BINARY_DIR})
+configure_file(
+    ${CMAKE_SOURCE_DIR}/check/config.hpp.in
+    ${CMAKE_BINARY_DIR}/config.hpp
+)
 
 # prepare Catch library
 set(CATCH_INCLUDE_DIR ${FilereaderLp_DIR}/external/catch)

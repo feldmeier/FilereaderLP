@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.0.0)
 
 project(FilereaderLp LANGUAGES CXX)
+include(CTest)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -9,12 +10,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 #TODO
 include_directories(
    ${CMAKE_SOURCE_DIR}/src/
-)
-
-include_directories(${CMAKE_BINARY_DIR})
-configure_file(
-    ${CMAKE_SOURCE_DIR}/config.hpp.in
-    ${CMAKE_BINARY_DIR}/config.hpp
 )
 
 # Function to set compiler flags on and off easily.
