@@ -6,6 +6,5 @@
 #include "model.hpp"
 
 Model readinstance(std::string filename);
-void writeinstance(Model&, std::string filename);
 
 #endif
