@@ -11,6 +11,12 @@ include_directories(
    ${CMAKE_SOURCE_DIR}/src/
 )
 
+include_directories(${CMAKE_BINARY_DIR})
+configure_file(
+    ${CMAKE_SOURCE_DIR}/config.hpp.in
+    ${CMAKE_BINARY_DIR}/config.hpp
+)
+
 # Function to set compiler flags on and off easily.
 include(CheckCXXCompilerFlag)
 function(enable_cxx_compiler_flag_if_supported flag)
@@ -33,4 +39,4 @@ enable_cxx_compiler_flag_if_supported("-g")
 
 # Targets
 add_subdirectory(src)
-add_subdirectory(test)
+add_subdirectory(check)
