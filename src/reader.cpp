@@ -6,6 +6,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 void inline lpassert(bool condition) {
