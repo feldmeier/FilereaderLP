@@ -74,13 +74,13 @@ void Writer::writeexpression(std::shared_ptr<Expression> expr) {
          std::shared_ptr<QuadTerm> qt = expr->quadterms[i];
          writetofile("%+g ", qt->coef);
          if (qt->var1 == qt->var2) {
-            writetofile("%s^2", qt->var1->name.c_str());
+            writetofile("%s^2 ", qt->var1->name.c_str());
          } else {
             writetofile("%s * %s ", qt->var1->name.c_str(), qt->var2->name.c_str());
          }
       }
 
-      writetofile("]\\2");
+      writetofile("]/2");
    }
 }
 
@@ -124,7 +124,11 @@ void Writer::write(const Model& model) {
    writelineend();
    for (unsigned int i=0; i<model.variables.size(); i++) {
       std::shared_ptr<Variable> var = model.variables[i];
-      writetofile("%+g <= %s <= %+g", var->lowerbound, var->name.c_str(), var->upperbound);
+      if (var->lowerbound == -std::numeric_limits<double>::infinity() && var->upperbound == std::numeric_limits<double>::infinity()) {
+         writetofile("%s %s", var->name.c_str(), LP_KEYWORD_FREE[0].c_str());
+      } else {
+         writetofile("%+g <= %s <= %+g", var->lowerbound, var->name.c_str(), var->upperbound);
+      }
       writelineend();
    }
 
