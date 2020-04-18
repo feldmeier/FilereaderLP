@@ -1,11 +1,12 @@
 set(sources
    reader.cpp
+   writer.cpp
 )
 
 set(headers
-   builder.hpp
    model.hpp
    reader.hpp
+   writer.hpp
 )
 
 add_library(libreaderlp ${sources})
