@@ -68,7 +68,7 @@ void Writer::writeexpression(std::shared_ptr<Expression> expr) {
       if (expr->linterms.size() > 0) {
          writetofile("+ ");
       }
-      writetofile("[");
+      writetofile("[ ");
       
       for (unsigned int i=0; i<expr->quadterms.size(); i++) {
          std::shared_ptr<QuadTerm> qt = expr->quadterms[i];
