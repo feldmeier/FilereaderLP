@@ -799,12 +799,16 @@ void Reader::readnexttoken(bool& done) {
       this->linebufferpos = this->linebuffer;
       this->linebufferrefill = false;
 
-      for (unsigned int i=0; i<LP_MAX_LINE_LENGTH; i++) {
-         if (this->linebuffer[i] == '\r') {
-            this->linebuffer[i] = '\n';
+      unsigned int linelength;
+      for (linelength=0; linelength<LP_MAX_LINE_LENGTH; linelength++) {
+         if (this->linebuffer[linelength] == '\r') {
+            this->linebuffer[linelength] = '\n';
+         }
+         if (this->linebuffer[linelength] == '\n') {
+            break;
          }
       }
-      lpassert (this->linebuffer[LP_MAX_LINE_LENGTH]-1 == '\n');
+      lpassert (this->linebuffer[linelength] == '\n');
 
       // fgets returns nullptr if end of file reached (EOF following a \n)
       if (eof == nullptr) {
