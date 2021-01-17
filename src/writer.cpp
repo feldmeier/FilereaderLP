@@ -55,9 +55,9 @@ void Writer::writelineend() {
 }
 
 void Writer::writeexpression(std::shared_ptr<Expression> expr) {
-   if (expr->name != "") {
-      writetofile("%s: ", expr->name.c_str());
-   }
+   // if (expr->name != "") {
+   //    writetofile("%s: ", expr->name.c_str());
+   // }
 
    for (unsigned int i = 0; i < expr->linterms.size(); i++) {
       std::shared_ptr<LinTerm> lt = expr->linterms[i];
@@ -113,6 +113,7 @@ void Writer::write(const Model& model) {
       } else {
          writeexpression(con->expr);
          writetofile("<= %+g", con->upperbound);
+         writelineend();
          writeexpression(con->expr);
          writetofile(">= %+g", con->lowerbound);
       }

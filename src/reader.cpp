@@ -799,6 +799,13 @@ void Reader::readnexttoken(bool& done) {
       this->linebufferpos = this->linebuffer;
       this->linebufferrefill = false;
 
+      for (unsigned int i=0; i<LP_MAX_LINE_LENGTH; i++) {
+         if (this->linebuffer[i] == '\r') {
+            this->linebuffer[i] = '\n';
+         }
+      }
+      lpassert (this->linebuffer[LP_MAX_LINE_LENGTH]-1 == '\n');
+
       // fgets returns nullptr if end of file reached (EOF following a \n)
       if (eof == nullptr) {
          this->rawtokens.push_back(std::unique_ptr<RawToken>(new RawToken(RawTokenType::FLEND)));
